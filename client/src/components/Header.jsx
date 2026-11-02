@@ -1,181 +1,177 @@
-import { useState, useRef, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
-import { useNavigate } from 'react-router-dom';
 
 const Header = ({ isLoggedIn, setIsLoggedIn }) => {
   const navigate = useNavigate();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const location = useLocation();
 
-  // 드롭다운 바깥 영역 클릭 시 메뉴 닫기
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // 글쓰기 버튼 클릭
-  const handleWriteClick = () => {
-    const hasToken = !!localStorage.getItem('token');
-    if (isLoggedIn || hasToken) {
-      navigate('/write');
-    } else {
-      alert('글 작성을 위해 로그인이 필요합니다.');
-      navigate('/login', { state: { redirectTo: '/write' } });
-    }
-  };
-
-  // 로그아웃 처리
   const handleLogout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setIsLoggedIn(false);
-    setIsDropdownOpen(false);
     alert('로그아웃되었습니다.');
-    navigate('/');
+    navigate('/login');
   };
 
-  // 메뉴 이동 처리 (클릭 시 드롭다운 닫힘)
-  const handleMenuClick = (path) => {
-    setIsDropdownOpen(false);
-    navigate(path);
-  };
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   return (
     <HeaderContainer>
-      <Logo onClick={() => navigate('/')}>school_market</Logo>
-      
-      <NavGroup>
-        <WriteButton onClick={handleWriteClick}>+ 글쓰기</WriteButton>
+      <LogoSection onClick={() => navigate('/')}>
+        <LogoIcon>💸</LogoIcon>
+        <LogoTitle>MoneyPlan</LogoTitle>
+        <BadgeTag>스마트 캘린더</BadgeTag>
+      </LogoSection>
 
-        {isLoggedIn && (
-          <DropdownContainer ref={dropdownRef}>
-            <MyPageButton onClick={() => setIsDropdownOpen((prev) => !prev)}>
-              마이페이지 ▼
-            </MyPageButton>
+      <NavMenu>
+        <NavItem $active={location.pathname === '/'} onClick={() => navigate('/')}>
+          📅 캘린더
+        </NavItem>
+        <NavItem $active={location.pathname === '/recurring'} onClick={() => navigate('/recurring')}>
+          🔄 정기구독·고정비
+        </NavItem>
+        <NavItem $active={location.pathname === '/statistics'} onClick={() => navigate('/statistics')}>
+          📊 월간통계
+        </NavItem>
+      </NavMenu>
 
-            {/* 💡 드롭다운 메뉴 항목 */}
-            {isDropdownOpen && (
-              <DropdownMenu>
-                <MenuItem onClick={() => handleMenuClick('/mypage/edit')}>
-                  프로필 수정
-                </MenuItem>
-                <MenuItem onClick={() => handleMenuClick('/mypage/sales')}>
-                  판매내역
-                </MenuItem>
-                <MenuItem onClick={() => handleMenuClick('/mypage/buys')}>
-                  구매내역
-                </MenuItem>
-                <Divider />
-                <LogoutItem onClick={handleLogout}>
-                  로그아웃
-                </LogoutItem>
-              </DropdownMenu>
-            )}
-          </DropdownContainer>
+      <UserSection>
+        {isLoggedIn ? (
+          <>
+            <UserInfo>
+              <UserName>{user.nickname || '학생'}님</UserName>
+            </UserInfo>
+            <LogoutBtn onClick={handleLogout}>로그아웃</LogoutBtn>
+          </>
+        ) : (
+          <>
+            <LoginBtn onClick={() => navigate('/login')}>로그인</LoginBtn>
+            <SignupBtn onClick={() => navigate('/signup')}>회원가입</SignupBtn>
+          </>
         )}
-      </NavGroup>
+      </UserSection>
     </HeaderContainer>
   );
 };
 
 export default Header;
 
-// 🎨 styled-components
 const HeaderContainer = styled.header`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e9ecef;
-  background-color: #fff;
-`;
+  padding: 16px 28px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #f1f3f5;
 
-const Logo = styled.h1`
-  margin: 0;
-  font-size: 20px;
-  font-weight: bold;
-  color: #FF6F0F;
-  cursor: pointer;
-`;
-
-const NavGroup = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-`;
-
-const WriteButton = styled.button`
-  background-color: #FF6F0F;
-  color: #fff;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: bold;
-  cursor: pointer;
-`;
-
-/* 💡 드롭다운 스타일 정의 */
-const DropdownContainer = styled.div`
-  position: relative;
-`;
-
-const MyPageButton = styled.button`
-  background: none;
-  border: none;
-  color: #495057;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 8px 4px;
-
-  &:hover {
-    color: #212529;
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 16px;
   }
 `;
 
-const DropdownMenu = styled.div`
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 8px;
-  width: 140px;
-  background-color: #fff;
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 6px 0;
-  z-index: 100;
+const LogoSection = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
 `;
 
-const MenuItem = styled.div`
-  padding: 10px 16px;
+const LogoIcon = styled.span`
+  font-size: 26px;
+`;
+
+const LogoTitle = styled.h1`
+  font-size: 20px;
+  font-weight: 800;
+  color: #1c7ed6;
+  letter-spacing: -0.5px;
+`;
+
+const BadgeTag = styled.span`
+  font-size: 11px;
+  background-color: #e7f5ff;
+  color: #1971c2;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+`;
+
+const NavMenu = styled.nav`
+  display: flex;
+  gap: 8px;
+`;
+
+const NavItem = styled.button`
+  padding: 8px 14px;
   font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  background-color: ${(props) => (props.$active ? '#edf2ff' : 'transparent')};
+  color: ${(props) => (props.$active ? '#364fc7' : '#495057')};
+  transition: all 0.15s ease;
+
+  &:hover {
+    background-color: #f1f3f5;
+  }
+`;
+
+const UserSection = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
+const UserInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
+
+const UserName = styled.span`
+  font-size: 14px;
+  font-weight: 600;
   color: #343a40;
-  cursor: pointer;
-  transition: background 0.15s;
+`;
+
+const LogoutBtn = styled.button`
+  font-size: 12px;
+  padding: 6px 12px;
+  color: #868e96;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background-color: #fff;
 
   &:hover {
     background-color: #f8f9fa;
-    color: #FF6F0F;
+    color: #495057;
   }
 `;
 
-const Divider = styled.div`
-  height: 1px;
-  background-color: #f1f3f5;
-  margin: 4px 0;
-`;
-
-const LogoutItem = styled(MenuItem)`
-  color: #fa5252;
+const LoginBtn = styled.button`
+  font-size: 13px;
+  padding: 7px 14px;
+  font-weight: 600;
+  color: #1971c2;
+  border: 1px solid #a5d8ff;
+  border-radius: 6px;
+  background-color: #f8f9fa;
 
   &:hover {
-    background-color: #fff5f5;
-    color: #e03131;
+    background-color: #e7f5ff;
+  }
+`;
+
+const SignupBtn = styled.button`
+  font-size: 13px;
+  padding: 7px 14px;
+  font-weight: 600;
+  color: #fff;
+  border-radius: 6px;
+  background-color: #1971c2;
+
+  &:hover {
+    background-color: #1864ab;
   }
 `;

@@ -8,8 +8,7 @@ const Layout = ({ isLoggedIn, setIsLoggedIn }) => {
     <PageWrapper>
       <Header isLoggedIn={isLoggedIn} setIsLoggedIn={setIsLoggedIn} />
       <MainContent>
-        {/* context를 통해 하위 컴포넌트로 setIsLoggedIn 전달 */}
-        <Outlet context={{ setIsLoggedIn }} />
+        <Outlet context={{ setIsLoggedIn, isLoggedIn }} />
       </MainContent>
       <Footer />
     </PageWrapper>
@@ -18,19 +17,23 @@ const Layout = ({ isLoggedIn, setIsLoggedIn }) => {
 
 export default Layout;
 
-// styled-components 스타일 정의
 const PageWrapper = styled.div`
-  max-width: 600px;
+  max-width: 1100px;
   margin: 0 auto;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #fff;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.05); /* 모바일 뷰 구분용 연한 그림자 */
+  background-color: #ffffff;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.04);
 `;
 
 const MainContent = styled.main`
-  flex: 1; /* 콘텐츠 영역이 남은 높이를 채워 푸터가 하단에 붙도록 함 */
+  flex: 1;
+  padding: 24px;
   display: flex;
   flex-direction: column;
+
+  @media (max-width: 768px) {
+    padding: 16px 12px;
+  }
 `;

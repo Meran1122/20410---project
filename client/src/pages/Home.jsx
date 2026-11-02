@@ -1,228 +1,270 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-
-// DB products 테이블 기준 샘플 데이터
-const INITIAL_PRODUCTS = [
-  {
-    id: 1,
-    title: '모듈형 컴퓨터구조 교재 급처합니다',
-    price: 8000,
-    type: 'SELL',
-    category: '서적',
-    status: 'SELLING',
-    location: '3층 홈베이스',
-    image_url: 'https://via.placeholder.com/150',
-    created_at: '10분 전'
-  },
-  {
-    id: 2,
-    title: '체육복 상의 (L사이즈) 무료나눔',
-    price: 0,
-    type: 'FREE',
-    category: '교복',
-    status: 'SELLING',
-    location: '매점 앞',
-    image_url: 'https://via.placeholder.com/150',
-    created_at: '1시간 전'
-  },
-  {
-    id: 3,
-    title: '공학용 계산기 (FX-570EX)',
-    price: 15000,
-    type: 'SELL',
-    category: '학용품',
-    status: 'RESERVED',
-    location: '1층 중앙현관',
-    image_url: 'https://via.placeholder.com/150',
-    created_at: '3시간 전'
-  }
-];
-
-const CATEGORIES = ['전체', '서적', '교복', '학용품', '기타'];
+import BudgetBanner from '../components/BudgetBanner';
+import CalendarView from '../components/CalendarView';
+import DateDetailPanel from '../components/DateDetailPanel';
+import TransactionModal from '../components/TransactionModal';
 
 const Home = () => {
   const navigate = useNavigate();
-  const [products] = useState(INITIAL_PRODUCTS);
-  const [selectedCategory, setSelectedCategory] = useState('전체');
+  const today = new Date();
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth() + 1);
+  const [selectedDate, setSelectedDate] = useState(today.toISOString().split('T')[0]);
 
-  // 카테고리 필터링
-  const filteredProducts = selectedCategory === '전체'
-    ? products
-    : products.filter(item => item.category === selectedCategory);
+  const [transactions, setTransactions] = useState([]);
+  const [budgetData, setBudgetData] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // 모달 상태
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [transactionToEdit, setTransactionToEdit] = useState(null);
+
+  const token = localStorage.getItem('token');
+
+  // 데이터 로드
+  const fetchData = useCallback(async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const [txRes, budgetRes, catRes] = await Promise.all([
+        axios.get(`/api/transactions?year=${currentYear}&month=${currentMonth}`, { headers }),
+        axios.get(`/api/budgets?year=${currentYear}&month=${currentMonth}`, { headers }),
+        axios.get('/api/categories', { headers })
+      ]);
+
+      setTransactions(txRes.data.transactions || []);
+      setBudgetData(budgetRes.data);
+      setCategories(catRes.data || []);
+    } catch (error) {
+      console.error('데이터 조회 오류:', error);
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [token, currentYear, currentMonth, navigate]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // 월 이동
+  const handlePrevMonth = () => {
+    if (currentMonth === 1) {
+      setCurrentYear((prev) => prev - 1);
+      setCurrentMonth(12);
+    } else {
+      setCurrentMonth((prev) => prev - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 12) {
+      setCurrentYear((prev) => prev + 1);
+      setCurrentMonth(1);
+    } else {
+      setCurrentMonth((prev) => prev + 1);
+    }
+  };
+
+  const handleToday = () => {
+    const now = new Date();
+    setCurrentYear(now.getFullYear());
+    setCurrentMonth(now.getMonth() + 1);
+    setSelectedDate(now.toISOString().split('T')[0]);
+  };
+
+  // 정기 항목 동기화
+  const handleSyncRecurring = async () => {
+    if (!token) {
+      alert('로그인이 필요합니다.');
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const res = await axios.post(
+        '/api/recurring/sync',
+        { year: currentYear, month: currentMonth },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      alert(res.data.message);
+      fetchData();
+    } catch (error) {
+      alert('정기 항목 동기화 실패');
+    }
+  };
+
+  // 모달 열기
+  const handleOpenCreateModal = (dateStr) => {
+    if (!token) {
+      alert('내역을 등록하려면 로그인이 필요합니다.');
+      navigate('/login');
+      return;
+    }
+    setTransactionToEdit(null);
+    setSelectedDate(dateStr || today.toISOString().split('T')[0]);
+    setIsModalOpen(true);
+  };
+
+  const handleEditTransaction = (item) => {
+    setTransactionToEdit(item);
+    setIsModalOpen(true);
+  };
+
+  if (!token) {
+    return (
+      <GuestContainer>
+        <HeroCard>
+          <HeroIcon>💸</HeroIcon>
+          <HeroTitle>학생을 위한 스마트 캘린더 가계부, MoneyPlan</HeroTitle>
+          <HeroDesc>
+            매달 빠져나가는 넷플릭스, 통신비 등 <strong>정기 구독료</strong>부터 <br />
+            친구와의 <strong>약속 예정 지출</strong>까지 캘린더 위에 미리 등록하고, <br />
+            <strong>"오늘 내가 쓸 수 있는 하루 권장 예산"</strong>을 실시간으로 확인해보세요!
+          </HeroDesc>
+          <HeroBtnGroup>
+            <PrimaryBtn onClick={() => navigate('/login')}>로그인하고 시작하기</PrimaryBtn>
+            <SecondaryBtn onClick={() => navigate('/signup')}>회원가입</SecondaryBtn>
+          </HeroBtnGroup>
+        </HeroCard>
+      </GuestContainer>
+    );
+  }
 
   return (
-    <HomeContainer>
-      {/* 1. 카테고리 태그 바 */}
-      <CategoryNav>
-        {CATEGORIES.map((cat) => (
-          <CategoryChip
-            key={cat}
-            $active={selectedCategory === cat}
-            onClick={() => setSelectedCategory(cat)}
-          >
-            {cat}
-          </CategoryChip>
-        ))}
-      </CategoryNav>
+    <PageContainer>
+      {/* 1. 상단 스마트 예산 현황 배너 */}
+      <BudgetBanner
+        budgetData={budgetData}
+        currentYear={currentYear}
+        currentMonth={currentMonth}
+        onBudgetUpdated={fetchData}
+      />
 
-      {/* 2. 게시글 목록 영역 */}
-      <ProductList>
-        {filteredProducts.map((product) => (
-          <ProductCard 
-            key={product.id} 
-            onClick={() => navigate(`/product/${product.id}`)}
-          >
-            <Thumbnail src={product.image_url} alt={product.title} />
+      {/* 2. 메인 캘린더 뷰 */}
+      <CalendarView
+        currentYear={currentYear}
+        currentMonth={currentMonth}
+        onPrevMonth={handlePrevMonth}
+        onNextMonth={handleNextMonth}
+        onToday={handleToday}
+        onSyncRecurring={handleSyncRecurring}
+        transactions={transactions}
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+        onOpenCreateModal={handleOpenCreateModal}
+        onEditTransaction={handleEditTransaction}
+      />
 
-            <InfoArea>
-              <Title>{product.title}</Title>
-              
-              <Meta>
-                <LocationTag>📍 {product.location}</LocationTag>
-                <Dot>•</Dot>
-                <span>{product.created_at}</span>
-              </Meta>
+      {/* 3. 선택 날짜 상세 리스트 패널 */}
+      <DateDetailPanel
+        selectedDate={selectedDate}
+        transactions={transactions}
+        onOpenCreateModal={handleOpenCreateModal}
+        onEditTransaction={handleEditTransaction}
+        onRefresh={fetchData}
+      />
 
-              <PriceRow>
-                {product.status === 'RESERVED' && <Badge $type="reserved">예약중</Badge>}
-                {product.status === 'COMPLETED' && <Badge $type="completed">거래완료</Badge>}
-                
-                <Price>
-                  {product.type === 'FREE' || product.price === 0 ? (
-                    <FreeText>무료나눔 🎁</FreeText>
-                  ) : (
-                    `${product.price.toLocaleString()}원`
-                  )}
-                </Price>
-              </PriceRow>
-            </InfoArea>
-          </ProductCard>
-        ))}
-      </ProductList>
-    </HomeContainer>
+      {/* 4. 거래 추가/수정 모달 */}
+      <TransactionModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={fetchData}
+        categories={categories}
+        initialDate={selectedDate}
+        transactionToEdit={transactionToEdit}
+      />
+    </PageContainer>
   );
 };
 
 export default Home;
 
-// 🎨 styled-components 정의
-
-const HomeContainer = styled.div`
-  width: 100%;
+const PageContainer = styled.div`
   display: flex;
   flex-direction: column;
 `;
 
-const CategoryNav = styled.nav`
+const GuestContainer = styled.div`
+  padding: 40px 16px;
   display: flex;
-  gap: 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #f1f3f5;
-  overflow-x: auto;
-  white-space: nowrap;
-  
-  &::-webkit-scrollbar {
-    display: none;
-  }
-`;
-
-const CategoryChip = styled.button`
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid ${props => (props.$active ? '#FF6F0F' : '#e9ecef')};
-  background-color: ${props => (props.$active ? '#FF6F0F' : '#fff')};
-  color: ${props => (props.$active ? '#fff' : '#495057')};
-  font-size: 13px;
-  font-weight: ${props => (props.$active ? '600' : '400')};
-  cursor: pointer;
-  transition: all 0.15s ease-in-out;
-`;
-
-const ProductList = styled.div`
-  padding: 0 16px;
-`;
-
-const ProductCard = styled.article`
-  display: flex;
-  padding: 16px 0;
-  border-bottom: 1px solid #f1f3f5;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-
-  &:active {
-    background-color: #f8f9fa;
-  }
-`;
-
-const Thumbnail = styled.img`
-  width: 100px;
-  height: 100px;
-  border-radius: 8px;
-  object-fit: cover;
-  margin-right: 16px;
-  background-color: #f1f3f5;
-  flex-shrink: 0;
-`;
-
-const InfoArea = styled.div`
-  display: flex;
-  flex-direction: column;
   justify-content: center;
-  flex: 1;
-  min-width: 0;
 `;
 
-const Title = styled.h2`
+const HeroCard = styled.div`
+  max-width: 600px;
+  text-align: center;
+  background-color: #f8faff;
+  border: 1px solid #dbe4ff;
+  border-radius: 16px;
+  padding: 48px 24px;
+`;
+
+const HeroIcon = styled.div`
+  font-size: 54px;
+  margin-bottom: 16px;
+`;
+
+const HeroTitle = styled.h2`
+  font-size: 22px;
+  font-weight: 800;
+  color: #1c7ed6;
+  margin-bottom: 16px;
+`;
+
+const HeroDesc = styled.p`
   font-size: 15px;
-  font-weight: 500;
-  margin: 0 0 4px 0;
-  color: #212529;
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const Meta = styled.div`
-  font-size: 12px;
-  color: #868e96;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-`;
-
-const LocationTag = styled.span`
-  font-weight: 500;
   color: #495057;
+  line-height: 1.7;
+  margin-bottom: 32px;
+
+  strong {
+    color: #1971c2;
+  }
 `;
 
-const Dot = styled.span`
-  margin: 0 4px;
-`;
-
-const PriceRow = styled.div`
+const HeroBtnGroup = styled.div`
   display: flex;
-  align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 12px;
 `;
 
-const Price = styled.span`
-  font-size: 16px;
+const PrimaryBtn = styled.button`
+  padding: 12px 24px;
+  font-size: 15px;
   font-weight: 700;
-  color: #212529;
-`;
-
-const FreeText = styled.span`
-  color: #FF6F0F;
-  font-weight: 700;
-`;
-
-const Badge = styled.span`
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 600;
+  background-color: #1c7ed6;
   color: #fff;
-  background-color: ${props => (props.$type === 'reserved' ? '#2b8a3e' : '#868e96')};
+  border-radius: 8px;
+
+  &:hover {
+    background-color: #1971c2;
+  }
+`;
+
+const SecondaryBtn = styled.button`
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  background-color: #fff;
+  border: 1px solid #ced4da;
+  color: #495057;
+  border-radius: 8px;
+
+  &:hover {
+    background-color: #f1f3f5;
+  }
 `;
